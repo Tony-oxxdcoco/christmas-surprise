@@ -339,46 +339,90 @@ function resetApples() {
 function spawnApples() {
   const THREE = window.THREE;
   const goal = Math.max(1, CONFIG.applesToCollect || 5);
-  // 增大苹果尺寸，更容易点到
-  const geo = new THREE.SphereGeometry(0.18, 24, 24);
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xff3b6f,
-    roughness: 0.2,
-    metalness: 0.15,
-    emissive: 0xff3b6f,
-    emissiveIntensity: 0.4,  // 更亮，更容易看到
-  });
-
+  const treeScale = 0.5;  // 与树的缩放保持一致
+  
+  // 改进苹果外观：更可爱、更精致
+  // 使用稍微椭圆的形状，更像真实苹果
+  const geo = new THREE.SphereGeometry(0.12 * treeScale, 32, 32);
+  
   for (let i = 0; i < goal; i++) {
-    const apple = new THREE.Mesh(geo, mat.clone());
-    apple.userData.isApple = true;
-    apple.userData.collected = false;
-    apple.userData.pop = 0;
+    // 每个苹果稍微不同，更有层次感
+    const appleGroup = new THREE.Group();
+    
+    // 主苹果体（稍微压扁，更像真实苹果）
+    const apple = new THREE.Mesh(
+      geo,
+      new THREE.MeshStandardMaterial({
+        color: 0xff4d6d,  // 更鲜艳的红色
+        roughness: 0.3,
+        metalness: 0.2,
+        emissive: 0xff1a3d,
+        emissiveIntensity: 0.3,
+      })
+    );
+    apple.scale.set(1, 1.1, 1);  // 稍微拉长，更像苹果
+    appleGroup.add(apple);
+    
+    // 添加高光点（让苹果更立体）
+    const highlight = new THREE.Mesh(
+      new THREE.SphereGeometry(0.03 * treeScale, 16, 16),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.1,
+        metalness: 0.9,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.5,
+        transparent: true,
+        opacity: 0.6,
+      })
+    );
+    highlight.position.set(0.04 * treeScale, 0.06 * treeScale, 0.05 * treeScale);
+    appleGroup.add(highlight);
+    
+    // 添加叶子（小装饰）
+    const leaf = new THREE.Mesh(
+      new THREE.SphereGeometry(0.02 * treeScale, 8, 8),
+      new THREE.MeshStandardMaterial({
+        color: 0x4a7c59,
+        roughness: 0.6,
+        metalness: 0.1,
+      })
+    );
+    leaf.scale.set(1, 0.3, 1);
+    leaf.position.set(0, 0.14 * treeScale, 0);
+    appleGroup.add(leaf);
+    
+    appleGroup.userData.isApple = true;
+    appleGroup.userData.collected = false;
+    appleGroup.userData.pop = 0;
     
     // 增大碰撞体积：添加一个更大的不可见碰撞体
     const hitBox = new THREE.Mesh(
-      new THREE.SphereGeometry(0.25, 16, 16),
+      new THREE.SphereGeometry(0.18 * treeScale, 16, 16),
       new THREE.MeshBasicMaterial({ visible: false })
     );
-    apple.add(hitBox);
-    apple.userData.hitBox = hitBox;
+    appleGroup.add(hitBox);
+    appleGroup.userData.hitBox = hitBox;
 
-    // 随机放在树上：越往上半径越小，但确保在可见位置（配合缩小的树，scale=0.7）
-    const baseY = 0.7 * 0.7;  // 缩小后的基础高度
-    const heightRange = 1.6 * 0.7;  // 缩小后的高度范围
+    // 随机放在树上：越往上半径越小，但确保在可见位置（配合缩小的树，scale=0.5）
+    const baseY = 0.7 * treeScale;  // 缩小后的基础高度
+    const heightRange = 1.6 * treeScale;  // 缩小后的高度范围
     const y = baseY + Math.random() * heightRange;
     const t = (y - baseY) / heightRange; // 0..1
-    const radius = 1.15 * 0.7 * (1 - t) * 0.98;  // 稍微外移，配合缩小
+    const radius = 1.15 * treeScale * (1 - t) * 0.98;  // 稍微外移，配合缩小
     const ang = Math.random() * Math.PI * 2;
-    apple.position.set(Math.cos(ang) * radius, y, Math.sin(ang) * radius);
+    appleGroup.position.set(Math.cos(ang) * radius, y, Math.sin(ang) * radius);
 
     // 确保苹果在树外，更容易点到
-    apple.position.multiplyScalar(1.08);
-    apple.rotation.set(Math.random() * 0.5, Math.random() * 0.5, Math.random() * 0.5);
-    apple.scale.setScalar(1);
+    appleGroup.position.multiplyScalar(1.1);
+    appleGroup.rotation.set(
+      Math.random() * 0.3 - 0.15,
+      Math.random() * Math.PI * 2,
+      Math.random() * 0.3 - 0.15
+    );
 
-    three.apples.push(apple);
-    three.treeGroup.add(apple);
+    three.apples.push(appleGroup);
+    three.treeGroup.add(appleGroup);
   }
 }
 
@@ -387,8 +431,8 @@ function buildTree() {
 
   const group = new THREE.Group();
   
-  // 整体缩放因子：让树变小（0.7 = 缩小到70%）
-  const scale = 0.7;
+  // 整体缩放因子：让树变小（0.5 = 缩小到50%，更精致）
+  const scale = 0.5;
 
   // 树干（更精致，有纹理感，缩小）
   const trunk = new THREE.Mesh(
@@ -596,9 +640,9 @@ function initThreeOnce() {
   scene.fog = new THREE.Fog(0xe8f4f8, 6, 14);
 
   const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 40);
-  // 调整相机位置，让缩小的树看起来更合适
-  camera.position.set(0, 1.1, 3.5);
-  camera.lookAt(0, 0.8, 0);
+  // 调整相机位置，让缩小的树看起来更合适（树现在是0.5倍）
+  camera.position.set(0, 0.8, 2.8);
+  camera.lookAt(0, 0.6, 0);
 
   // 光照：柔和、偏节日
   scene.add(new THREE.AmbientLight(0xffffff, 0.55));
