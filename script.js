@@ -294,10 +294,12 @@ function spawnApples() {
     apple.add(hitBox);
     apple.userData.hitBox = hitBox;
 
-    // 随机放在树上：越往上半径越小，但确保在可见位置
-    const y = 0.7 + Math.random() * 1.6;
-    const t = (y - 0.7) / 1.6; // 0..1
-    const radius = 1.15 * (1 - t) * 0.98;  // 稍微外移
+    // 随机放在树上：越往上半径越小，但确保在可见位置（配合缩小的树，scale=0.7）
+    const baseY = 0.7 * 0.7;  // 缩小后的基础高度
+    const heightRange = 1.6 * 0.7;  // 缩小后的高度范围
+    const y = baseY + Math.random() * heightRange;
+    const t = (y - baseY) / heightRange; // 0..1
+    const radius = 1.15 * 0.7 * (1 - t) * 0.98;  // 稍微外移，配合缩小
     const ang = Math.random() * Math.PI * 2;
     apple.position.set(Math.cos(ang) * radius, y, Math.sin(ang) * radius);
 
@@ -315,27 +317,30 @@ function buildTree() {
   const THREE = window.THREE;
 
   const group = new THREE.Group();
+  
+  // 整体缩放因子：让树变小（0.7 = 缩小到70%）
+  const scale = 0.7;
 
-  // 树干（更精致，有纹理感）
+  // 树干（更精致，有纹理感，缩小）
   const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.16, 0.22, 0.65, 24),
+    new THREE.CylinderGeometry(0.16 * scale, 0.22 * scale, 0.65 * scale, 24),
     new THREE.MeshStandardMaterial({ 
       color: 0x6b4423, 
       roughness: 0.85,
       metalness: 0.1
     })
   );
-  trunk.position.y = 0.32;
+  trunk.position.y = 0.32 * scale;
   trunk.castShadow = true;
   group.add(trunk);
 
-  // 树叶层（5层，更精致有层次，使用更自然的绿色渐变）
+  // 树叶层（5层，更精致有层次，使用更自然的绿色渐变，缩小）
   const layers = [
-    { y: 0.85, r: 1.35, h: 1.3, c: 0x2ecf9f },  // 底层最大
-    { y: 1.35, r: 1.15, h: 1.1, c: 0x26c08f },
-    { y: 1.75, r: 0.95, h: 0.95, c: 0x1eb17f },
-    { y: 2.1, r: 0.75, h: 0.8, c: 0x16a26f },
-    { y: 2.4, r: 0.55, h: 0.65, c: 0x0e935f },  // 顶层最小
+    { y: 0.85 * scale, r: 1.35 * scale, h: 1.3 * scale, c: 0x2ecf9f },  // 底层最大
+    { y: 1.35 * scale, r: 1.15 * scale, h: 1.1 * scale, c: 0x26c08f },
+    { y: 1.75 * scale, r: 0.95 * scale, h: 0.95 * scale, c: 0x1eb17f },
+    { y: 2.1 * scale, r: 0.75 * scale, h: 0.8 * scale, c: 0x16a26f },
+    { y: 2.4 * scale, r: 0.55 * scale, h: 0.65 * scale, c: 0x0e935f },  // 顶层最小
   ];
   
   layers.forEach((layer, idx) => {
@@ -383,12 +388,12 @@ function buildTree() {
     group.add(layerGroup);
   });
 
-  // 星星（更精致，多层设计）
+  // 星星（更精致，多层设计，缩小）
   const starGroup = new THREE.Group();
   
   // 外层大星星
   const starOuter = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.2, 0),
+    new THREE.OctahedronGeometry(0.2 * scale, 0),
     new THREE.MeshStandardMaterial({
       color: 0xffe066,
       roughness: 0.1,
@@ -401,7 +406,7 @@ function buildTree() {
   
   // 内层小星星（旋转）
   const starInner = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.12, 0),
+    new THREE.OctahedronGeometry(0.12 * scale, 0),
     new THREE.MeshStandardMaterial({
       color: 0xffffff,
       roughness: 0.05,
@@ -412,21 +417,21 @@ function buildTree() {
   );
   starGroup.add(starInner);
   
-  starGroup.position.y = 2.75;
+  starGroup.position.y = 2.75 * scale;
   starGroup.userData.isStar = true;
   group.add(starGroup);
 
-  // 彩灯串（更精致，有闪烁感）
-  const bulbGeo = new THREE.SphereGeometry(0.07, 20, 20);
+  // 彩灯串（更精致，有闪烁感，缩小）
+  const bulbGeo = new THREE.SphereGeometry(0.07 * scale, 20, 20);
   const bulbColors = [
     0xff86bc, 0x22c7a9, 0xffd166, 0x6a7dff, 
     0xff5fa2, 0xffffff, 0xffb3d9, 0x4dd0e1
   ];
   
-  // 彩灯分布更均匀，更有设计感
+  // 彩灯分布更均匀，更有设计感（缩小）
   for (let layer = 0; layer < 5; layer++) {
-    const layerY = 0.9 + layer * 0.4;
-    const layerRadius = 1.2 * (1 - layer * 0.15);
+    const layerY = (0.9 + layer * 0.4) * scale;
+    const layerRadius = 1.2 * scale * (1 - layer * 0.15);
     const bulbsPerLayer = 8 + layer * 2;
     
     for (let i = 0; i < bulbsPerLayer; i++) {
@@ -451,8 +456,8 @@ function buildTree() {
     }
   }
 
-  // 装饰球（更精致，有高光）
-  const ornamentGeo = new THREE.SphereGeometry(0.1, 24, 24);
+  // 装饰球（更精致，有高光，缩小）
+  const ornamentGeo = new THREE.SphereGeometry(0.1 * scale, 24, 24);
   const ornamentColors = [
     { c: 0xff3b6f, m: 0.7 },  // 红色
     { c: 0xffd166, m: 0.8 },  // 金色
@@ -461,9 +466,9 @@ function buildTree() {
   ];
   
   for (let i = 0; i < 15; i++) {
-    const y = 1.0 + Math.random() * 1.5;
-    const t = (y - 1.0) / 1.5;
-    const radius = 1.1 * (1 - t) * 0.97;
+    const y = (1.0 + Math.random() * 1.5) * scale;
+    const t = (y / scale - 1.0) / 1.5;
+    const radius = 1.1 * scale * (1 - t) * 0.97;
     const ang = Math.random() * Math.PI * 2;
     const ornamentData = ornamentColors[Math.floor(Math.random() * ornamentColors.length)];
     
@@ -482,9 +487,9 @@ function buildTree() {
     group.add(ornament);
   }
 
-  // 底座（雪地，更精致）
+  // 底座（雪地，更精致，缩小）
   const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(2.2, 64),
+    new THREE.CircleGeometry(2.2 * scale, 64),
     new THREE.MeshStandardMaterial({ 
       color: 0xf5f9fa,
       roughness: 0.95,
@@ -492,11 +497,11 @@ function buildTree() {
     })
   );
   ground.rotation.x = -Math.PI / 2;
-  ground.position.y = 0.02;
+  ground.position.y = 0.02 * scale;
   ground.receiveShadow = true;
   group.add(ground);
 
-  group.position.y = -0.05;
+  group.position.y = -0.05 * scale;
   return group;
 }
 
@@ -522,8 +527,9 @@ function initThreeOnce() {
   scene.fog = new THREE.Fog(0xe8f4f8, 6, 14);
 
   const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 40);
-  camera.position.set(0, 1.55, 4.2);
-  camera.lookAt(0, 1.2, 0);
+  // 调整相机位置，让缩小的树看起来更合适
+  camera.position.set(0, 1.1, 3.5);
+  camera.lookAt(0, 0.8, 0);
 
   // 光照：柔和、偏节日
   scene.add(new THREE.AmbientLight(0xffffff, 0.55));
