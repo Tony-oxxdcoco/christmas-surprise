@@ -11,8 +11,7 @@ const CONFIG = {
   // 游戏目标：要收集几个苹果
   applesToCollect: 5,
 
-  // 是否启用“暗号”进入（更私密，发链接不怕别人点开）
-  enablePasscode: false,
+  // 密码（必须输入才能进入）
   passcode: "20250307",
 };
 
@@ -61,8 +60,14 @@ function sleep(ms) {
 function safePlayAudio() {
   if (!bgm) return;
   if (isMuted) return;
+  // 微信里音频必须由用户手势触发；所以只在"点开始/点按钮"后调用
   const p = bgm.play();
-  if (p && typeof p.catch === "function") p.catch(() => {});
+  if (p && typeof p.catch === "function") {
+    p.catch((err) => {
+      // 如果本地文件加载失败，会自动尝试备用链接
+      console.log("音频加载失败，尝试备用链接");
+    });
+  }
 }
 function safePauseAudio() {
   if (!bgm) return;
@@ -146,21 +151,46 @@ function swipeTrail(x, y) {
 function renderPhoto() {
   const name = CONFIG.photo;
   if (!name) {
-    photoEl.src = "";
-    photoEl.style.display = "none";
-    photoFallbackEl.classList.remove("is-hidden");
+    if (photoEl) photoEl.style.display = "none";
+    if (photoFallbackEl) photoFallbackEl.classList.remove("is-hidden");
     return;
   }
 
-  const src = `./photos/${name}`;
+  // 尝试多种路径格式
+  const paths = [
+    `./photos/${name}`,
+    `photos/${name}`,
+    `/photos/${name}`,
+  ];
+  
+  if (!photoEl) return;
+  
   photoEl.style.display = "block";
-  photoFallbackEl.classList.add("is-hidden");
-  photoEl.src = src;
-
+  if (photoFallbackEl) photoFallbackEl.classList.add("is-hidden");
+  
+  // 先尝试第一个路径
+  photoEl.src = paths[0];
+  
   photoEl.onerror = () => {
-    photoEl.onerror = null;
-    photoEl.style.display = "none";
-    photoFallbackEl.classList.remove("is-hidden");
+    // 如果第一个路径失败，尝试其他路径
+    const currentSrc = photoEl.src;
+    const currentIndex = paths.findIndex(p => currentSrc.includes(p.split('/').pop()));
+    
+    if (currentIndex < paths.length - 1) {
+      photoEl.src = paths[currentIndex + 1];
+    } else {
+      // 所有路径都失败
+      photoEl.onerror = null;
+      photoEl.style.display = "none";
+      if (photoFallbackEl) photoFallbackEl.classList.remove("is-hidden");
+      console.error("照片加载失败，路径:", paths);
+    }
+  };
+  
+  photoEl.onload = () => {
+    // 照片加载成功
+    if (photoFallbackEl) photoFallbackEl.classList.add("is-hidden");
+    photoEl.style.display = "block";
   };
 }
 
@@ -194,14 +224,17 @@ async function unlockReward() {
 
   if (greetingTitleEl) greetingTitleEl.textContent = CONFIG.greetingTitle || "圣诞节快乐";
   if (greetingSubEl) greetingSubEl.textContent = CONFIG.greetingSub || "";
+  
+  // 确保照片正确显示
+  await sleep(100);
   renderPhoto();
   startCelebration();
 }
 
 // ========= 页面流程 =========
-function gatePasscodeIfNeeded() {
-  if (!CONFIG.enablePasscode) return true;
-  const input = window.prompt("输入暗号进入（提示：今年的生日日期？）");
+function checkPasscode() {
+  const input = window.prompt("输入密码进入（提示：今年的生日日期？）");
+  if (!input) return false;
   return input === CONFIG.passcode;
 }
 
@@ -756,8 +789,8 @@ function startRenderLoop() {
 
 // ========= 事件绑定 =========
 btnStart.addEventListener("click", () => {
-  if (!gatePasscodeIfNeeded()) {
-    alert("暗号不对哦～再想想。");
+  if (!checkPasscode()) {
+    alert("密码不对哦～再想想。");
     return;
   }
   safePlayAudio();
@@ -795,9 +828,16 @@ btnBack.addEventListener("click", () => {
 });
 
 btnFireworks.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
   safePlayAudio();
   const r = e.currentTarget.getBoundingClientRect();
-  fireworksBurst(r.left + r.width / 2, r.top + r.height / 2, 1.25);
+  const x = r.left + r.width / 2;
+  const y = r.top + r.height / 2;
+  fireworksBurst(x, y, 1.5);
+  // 多放几个烟花，更明显
+  setTimeout(() => fireworksBurst(x + 50, y - 30, 1.2), 100);
+  setTimeout(() => fireworksBurst(x - 50, y - 30, 1.2), 200);
 });
 
 // 全屏点击：冒小心心（在 3D 树界面会更克制：避免覆盖太多）
