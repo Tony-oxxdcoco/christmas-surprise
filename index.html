@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="圣诞节的小惊喜：3D 圣诞树自动旋转，划动有特效，点苹果收集解锁合照。" />
+    <title>圣诞节快乐</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="snow" aria-hidden="true"></div>
+    <div id="fx" aria-hidden="true"></div>
+
+    <main class="app" role="main">
+      <!-- 首屏：微信里需要一次用户点击来“开始” -->
+      <section id="start" class="panel panel--center">
+        <div class="card">
+          <div class="badge">🎄 圣诞节限定</div>
+          <h1 class="title">圣诞节快乐<br />给你一个小惊喜</h1>
+          <p class="subtitle">点一下开始：一棵 3D 圣诞树在等你（点苹果有惊喜）</p>
+          <button id="btnStart" class="btn btn--primary">点我开始</button>
+          <p class="hint">（建议开声音：有可选背景音乐）</p>
+        </div>
+      </section>
+
+      <!-- 3D 圣诞树：滑动特效 + 点苹果收集 -->
+      <section id="tree" class="treePanel is-hidden" aria-hidden="true">
+        <div class="treeStage">
+          <canvas id="treeCanvas" class="treeCanvas" aria-label="3D 圣诞树"></canvas>
+          <div class="treeHud">
+            <div class="treeHud__top">
+              <div class="chip">🎄 3D 圣诞树</div>
+              <div class="chip chip--soft" id="treeStatus">收集苹果：0/5</div>
+            </div>
+            <div class="treeHud__tips">手指左右拖动旋转｜快速划过有特效｜点树上的苹果</div>
+            <div class="treeHud__actions">
+              <button id="btnMute" class="btn btn--ghost" aria-pressed="false">声音：开</button>
+              <button id="btnTreeReset" class="btn btn--ghost">重置苹果</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 奖励：合照 -->
+      <section id="reward" class="panel is-hidden" aria-hidden="true">
+        <div class="card card--reward">
+          <div class="badge badge--win">🎄 圣诞节快乐</div>
+          <h2 class="title2" id="greetingTitle">愿你平安喜乐</h2>
+          <p class="subtitle" id="greetingSub">这个冬天也要一直开心呀</p>
+
+          <div class="photoFrame photoFrame--solo">
+            <img id="photo" class="photo" alt="我们的合照" />
+            <div id="photoFallback" class="photoFallback is-hidden">
+              <div class="fallbackTitle">把合照放进来就完成啦</div>
+              <div class="fallbackSub">把文件放到 <code>photos/</code>，再改一下 <code>script.js</code> 里的合照文件名</div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="btnFireworks" class="btn btn--primary">再放一次烟花</button>
+            <button id="btnBack" class="btn btn--ghost">再玩一次</button>
+          </div>
+
+          <p class="hint hint--center">想要更私密：可以开启“暗号进入”（见 README）</p>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>Made with ♥ for Christmas Eve</span>
+      </footer>
+    </main>
+
+    <!-- 可选背景音乐：放到 assets/bgm.mp3；微信不支持自动播，需要用户点“开始”后再播放 -->
+    <audio id="bgm" preload="auto" loop>
+      <source src="./assets/bgm.mp3" type="audio/mpeg" />
+    </audio>
+
+    <!-- Three.js（3D 渲染） -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>
+
+
