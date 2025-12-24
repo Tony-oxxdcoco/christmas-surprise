@@ -156,39 +156,50 @@ function renderPhoto() {
     return;
   }
 
-  // 尝试多种路径格式
-  const paths = [
-    `./photos/${name}`,
-    `photos/${name}`,
-    `/photos/${name}`,
-  ];
-  
   if (!photoEl) return;
+  
+  // 根据当前环境选择正确的路径
+  // GitHub Pages 使用相对路径，本地开发也用相对路径
+  const basePath = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? './photos/' 
+    : './photos/';  // GitHub Pages 也使用相对路径
+  
+  const photoPath = basePath + name;
   
   photoEl.style.display = "block";
   if (photoFallbackEl) photoFallbackEl.classList.add("is-hidden");
   
-  // 先尝试第一个路径
-  photoEl.src = paths[0];
+  // 设置图片源
+  photoEl.src = photoPath;
   
+  // 添加加载错误处理
+  let retryCount = 0;
   photoEl.onerror = () => {
-    // 如果第一个路径失败，尝试其他路径
-    const currentSrc = photoEl.src;
-    const currentIndex = paths.findIndex(p => currentSrc.includes(p.split('/').pop()));
+    retryCount++;
+    console.log(`照片加载失败，尝试 ${retryCount}，路径: ${photoPath}`);
     
-    if (currentIndex < paths.length - 1) {
-      photoEl.src = paths[currentIndex + 1];
+    // 尝试其他路径格式
+    if (retryCount === 1) {
+      // 尝试不带 ./ 的路径
+      photoEl.src = `photos/${name}`;
+    } else if (retryCount === 2) {
+      // 尝试绝对路径（GitHub Pages）
+      photoEl.src = `/christmas-surprise/photos/${name}`;
     } else {
       // 所有路径都失败
       photoEl.onerror = null;
       photoEl.style.display = "none";
-      if (photoFallbackEl) photoFallbackEl.classList.remove("is-hidden");
-      console.error("照片加载失败，路径:", paths);
+      if (photoFallbackEl) {
+        photoFallbackEl.classList.remove("is-hidden");
+        photoFallbackEl.querySelector('.fallbackSub').textContent = `无法加载照片，路径: ${photoPath}`;
+      }
+      console.error("照片加载失败，已尝试所有路径");
     }
   };
   
   photoEl.onload = () => {
     // 照片加载成功
+    console.log("照片加载成功:", photoEl.src);
     if (photoFallbackEl) photoFallbackEl.classList.add("is-hidden");
     photoEl.style.display = "block";
   };
@@ -225,9 +236,18 @@ async function unlockReward() {
   if (greetingTitleEl) greetingTitleEl.textContent = CONFIG.greetingTitle || "圣诞节快乐";
   if (greetingSubEl) greetingSubEl.textContent = CONFIG.greetingSub || "";
   
-  // 确保照片正确显示
-  await sleep(100);
+  // 确保照片正确显示 - 等待页面渲染完成
+  await sleep(200);
   renderPhoto();
+  
+  // 如果照片还没加载，再试一次
+  setTimeout(() => {
+    if (photoEl && (!photoEl.complete || photoEl.naturalWidth === 0)) {
+      console.log("照片可能未加载，重试...");
+      renderPhoto();
+    }
+  }, 500);
+  
   startCelebration();
 }
 
