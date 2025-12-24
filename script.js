@@ -252,17 +252,16 @@ async function unlockReward() {
   if (greetingTitleEl) greetingTitleEl.textContent = CONFIG.greetingTitle || "圣诞节快乐";
   if (greetingSubEl) greetingSubEl.textContent = CONFIG.greetingSub || "";
   
-  // 确保照片正确显示 - 等待页面渲染完成
-  await sleep(200);
+  // 立即开始加载照片，不等待
   renderPhoto();
   
-  // 如果照片还没加载，再试一次
+  // 如果照片还没加载，快速重试
   setTimeout(() => {
     if (photoEl && (!photoEl.complete || photoEl.naturalWidth === 0)) {
       console.log("照片可能未加载，重试...");
       renderPhoto();
     }
-  }, 500);
+  }, 200);
   
   startCelebration();
 }
@@ -911,13 +910,15 @@ btnFireworks.addEventListener("click", (e) => {
   e.preventDefault();
   e.stopPropagation();
   safePlayAudio();
-  const r = e.currentTarget.getBoundingClientRect();
-  const x = r.left + r.width / 2;
-  const y = r.top + r.height / 2;
-  fireworksBurst(x, y, 1.5);
-  // 多放几个烟花，更明显
-  setTimeout(() => fireworksBurst(x + 50, y - 30, 1.2), 100);
-  setTimeout(() => fireworksBurst(x - 50, y - 30, 1.2), 200);
+  // 在屏幕正中央放烟花
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2;
+  fireworksBurst(centerX, centerY, 2.0);
+  // 在中央周围放多个烟花，形成烟花群
+  setTimeout(() => fireworksBurst(centerX + 60, centerY - 40, 1.5), 100);
+  setTimeout(() => fireworksBurst(centerX - 60, centerY - 40, 1.5), 200);
+  setTimeout(() => fireworksBurst(centerX + 40, centerY + 50, 1.3), 150);
+  setTimeout(() => fireworksBurst(centerX - 40, centerY + 50, 1.3), 250);
 });
 
 // 全屏点击：冒小心心（在 3D 树界面会更克制：避免覆盖太多）
@@ -926,9 +927,43 @@ document.addEventListener("pointerdown", (e) => {
   popHeart(e.clientX, e.clientY);
 });
 
+// 预加载照片（加速显示）
+function preloadPhoto() {
+  const name = CONFIG.photo;
+  if (!name || !photoEl) return;
+  
+  // 提前创建图片对象并加载
+  const img = new Image();
+  const paths = [
+    `./photos/${name}`,
+    `photos/${name}`,
+    `/christmas-surprise/photos/${name}`,
+  ];
+  
+  let currentPathIndex = 0;
+  img.onload = () => {
+    console.log("照片预加载成功:", img.src);
+    // 预加载成功后，直接设置到显示元素
+    if (photoEl) {
+      photoEl.src = img.src;
+    }
+  };
+  
+  img.onerror = () => {
+    currentPathIndex++;
+    if (currentPathIndex < paths.length) {
+      img.src = paths[currentPathIndex];
+    }
+  };
+  
+  // 开始加载第一个路径
+  img.src = paths[0];
+}
+
 // 初始化
 startSnow();
 setTreeStatus();
+preloadPhoto();  // 页面加载时就开始预加载照片
 
 
 
