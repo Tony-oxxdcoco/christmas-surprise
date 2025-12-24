@@ -158,50 +158,66 @@ function renderPhoto() {
 
   if (!photoEl) return;
   
-  // 根据当前环境选择正确的路径
-  // GitHub Pages 使用相对路径，本地开发也用相对路径
-  const basePath = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-    ? './photos/' 
-    : './photos/';  // GitHub Pages 也使用相对路径
+  // 检测当前路径，确定正确的照片路径
+  const isGitHubPages = window.location.hostname.includes('github.io');
+  const pathname = window.location.pathname;
+  let basePath = './photos/';
+  
+  // 如果是 GitHub Pages，可能需要添加仓库名
+  if (isGitHubPages && pathname.includes('/christmas-surprise')) {
+    basePath = './photos/';  // 相对路径应该可以工作
+  }
   
   const photoPath = basePath + name;
   
   photoEl.style.display = "block";
   if (photoFallbackEl) photoFallbackEl.classList.add("is-hidden");
   
+  // 清除之前的错误处理，避免冲突
+  photoEl.onerror = null;
+  photoEl.onload = null;
+  
   // 设置图片源
   photoEl.src = photoPath;
+  console.log("尝试加载照片，路径:", photoPath);
   
   // 添加加载错误处理
   let retryCount = 0;
+  const maxRetries = 3;
+  const pathsToTry = [
+    photoPath,  // 原始路径
+    `photos/${name}`,  // 不带 ./
+    `/christmas-surprise/photos/${name}`,  // GitHub Pages 绝对路径
+  ];
+  
   photoEl.onerror = () => {
     retryCount++;
-    console.log(`照片加载失败，尝试 ${retryCount}，路径: ${photoPath}`);
+    console.log(`照片加载失败，尝试 ${retryCount}/${maxRetries}，当前路径: ${photoEl.src}`);
     
-    // 尝试其他路径格式
-    if (retryCount === 1) {
-      // 尝试不带 ./ 的路径
-      photoEl.src = `photos/${name}`;
-    } else if (retryCount === 2) {
-      // 尝试绝对路径（GitHub Pages）
-      photoEl.src = `/christmas-surprise/photos/${name}`;
+    if (retryCount < pathsToTry.length) {
+      // 尝试下一个路径
+      photoEl.src = pathsToTry[retryCount];
     } else {
       // 所有路径都失败
       photoEl.onerror = null;
       photoEl.style.display = "none";
       if (photoFallbackEl) {
         photoFallbackEl.classList.remove("is-hidden");
-        photoFallbackEl.querySelector('.fallbackSub').textContent = `无法加载照片，路径: ${photoPath}`;
+        const subEl = photoFallbackEl.querySelector('.fallbackSub');
+        if (subEl) {
+          subEl.textContent = `无法加载照片。已尝试路径: ${pathsToTry.join(', ')}`;
+        }
       }
-      console.error("照片加载失败，已尝试所有路径");
+      console.error("照片加载失败，已尝试所有路径:", pathsToTry);
     }
   };
   
   photoEl.onload = () => {
     // 照片加载成功
-    console.log("照片加载成功:", photoEl.src);
+    console.log("✅ 照片加载成功:", photoEl.src);
     if (photoFallbackEl) photoFallbackEl.classList.add("is-hidden");
     photoEl.style.display = "block";
+    photoEl.onerror = null;  // 清除错误处理，避免后续触发
   };
 }
 
