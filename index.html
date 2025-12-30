@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="圣诞节的小惊喜：3D 圣诞树自动旋转，划动有特效，点苹果收集解锁合照。" />
     <title>圣诞节快乐</title>
-    <link rel="stylesheet" href="./style.css?v=20251230g" />
+    <link rel="stylesheet" href="./style.css?v=20251230h" />
   </head>
   <body>
     <div id="snow" aria-hidden="true"></div>
@@ -75,13 +75,14 @@
 
     <!-- 可选背景音乐：放到 assets/bgm.mp3；微信不支持自动播，需要用户点“开始”后再播放 -->
     <audio id="bgm" preload="auto" loop>
-      <source src="./assets/bgm.mp3" type="audio/mpeg" />
+      <!-- 默认用仓库自带的音乐，JS 会自动优先切换到 assets/bgm.mp3（如果存在） -->
+      <source src="./assets/satisfaction.mp3" type="audio/mpeg" />
     </audio>
 
     <!-- Three.js（3D 渲染，带 CDN 兜底） + 主脚本 -->
     <script>
       (function () {
-        var BUILD = "20251230g";
+        var BUILD = "20251230h";
         var threeSources = [
           "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js",
           "https://unpkg.com/three@0.160.0/build/three.min.js",

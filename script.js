@@ -18,7 +18,7 @@ const CONFIG = {
 
 // 线上排查用：打开控制台看这个版本号，就能确认是不是最新代码
 //（发布到 GitHub Pages 后，如果还是旧版本，说明页面还没更新或被缓存）
-window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30g";
+window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30h";
 console.log("[christmas-surprise] build:", window.__CHRISTMAS_SURPRISE_BUILD__);
 
 const $ = (sel) => document.querySelector(sel);
@@ -73,8 +73,8 @@ let snowEnabled = true;
 // ========= 背景音乐兜底（bgm.mp3 缺失时自动用 satisfaction.mp3） =========
 function setupBgmFallback() {
   if (!bgm) return;
-  const candidates = ["./assets/bgm.mp3", "./assets/satisfaction.mp3"];
-  let idx = 0;
+  const primary = "./assets/bgm.mp3";
+  const fallback = "./assets/satisfaction.mp3";
 
   function use(src) {
     try {
@@ -84,23 +84,26 @@ function setupBgmFallback() {
     } catch {}
   }
 
-  function next() {
-    idx += 1;
-    if (idx >= candidates.length) {
-      console.warn("[christmas-surprise] bgm load failed: all candidates");
-      return;
+  // 尽量不触发 404：先用 HEAD 探测 bgm.mp3 是否存在
+  (async () => {
+    try {
+      const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const t = setTimeout(() => ctl?.abort?.(), 1800);
+      const res = await fetch(primary, { method: "HEAD", signal: ctl?.signal });
+      clearTimeout(t);
+      if (res && res.ok) use(primary);
+      else use(fallback);
+    } catch {
+      use(fallback);
     }
-    use(candidates[idx]);
-  }
+  })();
 
-  // 首次设置（优先 bgm.mp3）
-  use(candidates[idx]);
-
-  // 如果资源 404/加载失败，自动切换到下一首
+  // 如果资源加载失败，自动切到兜底
   bgm.addEventListener(
     "error",
     () => {
-      next();
+      if (bgm.src && bgm.src.includes("satisfaction.mp3")) return;
+      use(fallback);
     },
     { passive: true }
   );
@@ -664,6 +667,22 @@ function renderPhoto() {
   photoEl.src = src;
 }
 
+function preloadPhoto() {
+  try {
+    const name = CONFIG.photo;
+    if (!name) return;
+    const base = new URL(window.location.href);
+    base.hash = "";
+    base.search = "";
+    if (!base.pathname.endsWith("/")) base.pathname += "/";
+    const src = new URL(`photos/${encodeURIComponent(name)}`, base).toString();
+    const img = new Image();
+    img.decoding = "async";
+    img.loading = "eager";
+    img.src = src;
+  } catch {}
+}
+
 function startCelebration() {
   if (celebrateTimer) {
     clearInterval(celebrateTimer);
@@ -766,6 +785,7 @@ let three = {
   snowGeometry: null,
   snowMaterial: null,
   star: null,
+  fallingApples: [],
 };
 
 function hasWebGL() {
@@ -863,23 +883,24 @@ function spawnApples() {
     
     // 增大碰撞体积：添加一个更大的不可见碰撞体
     const hitBox = new THREE.Mesh(
-      new THREE.SphereGeometry(0.26, 12, 12),
+      new THREE.SphereGeometry(0.34, 10, 10),
       new THREE.MeshBasicMaterial({ visible: false })
     );
     apple.add(hitBox);
     apple.userData.hitBox = hitBox;
 
     // 随机放在树上：根据树轮廓估一个半径（适配新树更圆润的轮廓）
-    const yMin = 0.9;
-    const yMax = 2.25;
+    const yMin = 0.92;
+    const yMax = 2.08;
     const y = yMin + Math.random() * (yMax - yMin);
     const t = (y - yMin) / (yMax - yMin); // 0..1
-    const radius = (1.05 * (1 - t) + 0.15) * 0.95;
+    // 更“贴表面”：半径整体外移，避免苹果埋进树里
+    const radius = (1.22 * (1 - t) + 0.34) * 0.98;
     const ang = Math.random() * Math.PI * 2;
     apple.position.set(Math.cos(ang) * radius, y, Math.sin(ang) * radius);
 
     // 确保苹果在树外，更容易点到
-    apple.position.multiplyScalar(1.05);
+    apple.position.multiplyScalar(1.08);
     apple.rotation.set(Math.random() * 0.22 - 0.11, Math.random() * Math.PI * 2, Math.random() * 0.22 - 0.11);
     apple.scale.setScalar(1);
 
@@ -1235,12 +1256,62 @@ function raycastApple(clientX, clientY) {
   return null;
 }
 
+function startAppleFall(apple) {
+  const THREE = window.THREE;
+  if (!three.ready || !three.scene || !three.treeGroup) return;
+  if (!apple || !apple.userData?.isApple) return;
+  if (apple.userData.falling) return;
+  apple.userData.falling = true;
+
+  // 变成“世界坐标”的独立物体：避免跟着树一起旋转
+  const worldPos = new THREE.Vector3();
+  const worldQuat = new THREE.Quaternion();
+  const worldScale = new THREE.Vector3();
+  apple.getWorldPosition(worldPos);
+  apple.getWorldQuaternion(worldQuat);
+  apple.getWorldScale(worldScale);
+
+  try {
+    apple.parent?.remove?.(apple);
+  } catch {}
+  three.scene.add(apple);
+  apple.position.copy(worldPos);
+  apple.quaternion.copy(worldQuat);
+  apple.scale.copy(worldScale);
+
+  // 为掉落动画单独克隆材质，避免影响其他苹果
+  apple.traverse?.((o) => {
+    if (!o || !o.isMesh) return;
+    try {
+      if (o.material) {
+        o.material = o.material.clone();
+        o.material.transparent = true;
+        o.material.opacity = 1;
+      }
+      o.castShadow = false;
+      o.receiveShadow = false;
+    } catch {}
+  });
+
+  const vel = new THREE.Vector3((Math.random() - 0.5) * 0.55, 0.25, (Math.random() - 0.5) * 0.55);
+  const ang = new THREE.Vector3((Math.random() - 0.5) * 5.5, (Math.random() - 0.5) * 7.0, (Math.random() - 0.5) * 5.5);
+  const groundY = (three.treeGroup.position?.y || 0) + 0.04;
+
+  three.fallingApples.push({
+    obj: apple,
+    vel,
+    ang,
+    groundY,
+    bounces: 0,
+    fade: 0,
+  });
+}
+
 function collectApple(apple, clientX, clientY) {
   if (!apple || !apple.userData || !apple.userData.isApple) return;
   if (apple.userData.collected) return;
   apple.userData.collected = true;
   apple.userData.pop = 1;
-  apple.visible = false;
   three.collected += 1;
   setTreeStatus();
   popHeart(clientX, clientY);
@@ -1258,10 +1329,18 @@ function collectApple(apple, clientX, clientY) {
   } catch {}
   safePlayAudio();
 
+  // 苹果掉落到雪地：更有“收集感”（并且更自然，不是瞬间消失）
+  try {
+    // 从可点击列表移除，避免继续射线检测（也避免“点到空气”）
+    const idx = three.apples ? three.apples.indexOf(apple) : -1;
+    if (idx >= 0) three.apples.splice(idx, 1);
+    startAppleFall(apple);
+  } catch {}
+
   const goal = Math.max(1, CONFIG.applesToCollect || 5);
   if (three.collected >= goal) {
     // 通关：稍微停一下再跳奖励页，更有“揭晓”感
-    setTimeout(() => unlockReward(), 420);
+    setTimeout(() => unlockReward(), 900);
   }
 }
 
@@ -1352,6 +1431,64 @@ function startRenderLoop() {
       three.treeGroup.userData.garlandMat.emissiveIntensity = pulse;
       if (three.treeGroup.userData.glow) {
         three.treeGroup.userData.glow.material.opacity = 0.55 + Math.sin(t * 1.2) * 0.08;
+      }
+    }
+
+    // 掉落苹果动画（轻量：数量少，且只在点击后出现）
+    if (three.fallingApples && three.fallingApples.length) {
+      const g = 6.8; // world units/s^2
+      for (let i = three.fallingApples.length - 1; i >= 0; i--) {
+        const it = three.fallingApples[i];
+        const o = it.obj;
+        if (!o) {
+          three.fallingApples.splice(i, 1);
+          continue;
+        }
+
+        // 下落 + 轻微阻尼
+        it.vel.y -= g * dt;
+        it.vel.x *= Math.pow(0.985, dt * 60);
+        it.vel.z *= Math.pow(0.985, dt * 60);
+        o.position.x += it.vel.x * dt;
+        o.position.y += it.vel.y * dt;
+        o.position.z += it.vel.z * dt;
+
+        o.rotation.x += it.ang.x * dt;
+        o.rotation.y += it.ang.y * dt;
+        o.rotation.z += it.ang.z * dt;
+
+        // 落地
+        if (o.position.y <= it.groundY) {
+          o.position.y = it.groundY;
+          if (it.bounces < 1 && Math.abs(it.vel.y) > 1.0) {
+            it.vel.y = -it.vel.y * 0.22;
+            it.vel.x *= 0.6;
+            it.vel.z *= 0.6;
+            it.bounces += 1;
+          } else {
+            it.fade += dt;
+            const a = Math.max(0, 1 - it.fade * 2.0);
+            o.traverse?.((m) => {
+              if (m?.isMesh && m.material) m.material.opacity = a;
+            });
+            if (it.fade > 0.55) {
+              // 落地小小亮点
+              try {
+                const rect = canvas.getBoundingClientRect();
+                const x2 = rect.left + rect.width * 0.5;
+                const y2 = rect.top + rect.height * 0.85;
+                fireworksBurst(x2 + (Math.random() - 0.5) * 30, y2, 0.45);
+              } catch {}
+              try {
+                o.traverse?.((m) => {
+                  if (m?.isMesh && m.material?.dispose) m.material.dispose();
+                });
+              } catch {}
+              try { three.scene.remove(o); } catch {}
+              three.fallingApples.splice(i, 1);
+            }
+          }
+        }
       }
     }
 
@@ -1464,6 +1601,7 @@ initFireworks();
 setupBgmFallback();
 startSnow();
 setTreeStatus();
+preloadPhoto();
 
 
 
