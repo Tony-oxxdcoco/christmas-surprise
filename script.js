@@ -18,7 +18,7 @@ const CONFIG = {
 
 // 线上排查用：打开控制台看这个版本号，就能确认是不是最新代码
 //（发布到 GitHub Pages 后，如果还是旧版本，说明页面还没更新或被缓存）
-window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30c";
+window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30d";
 console.log("[christmas-surprise] build:", window.__CHRISTMAS_SURPRISE_BUILD__);
 
 const $ = (sel) => document.querySelector(sel);
@@ -57,8 +57,13 @@ const IS_MOBILE =
   typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || "");
 const DEVICE_MEMORY_GB = typeof navigator !== "undefined" ? Number(navigator.deviceMemory || 0) : 0;
 const CPU_CORES = typeof navigator !== "undefined" ? Number(navigator.hardwareConcurrency || 0) : 0;
-const LOW_POWER = prefersReducedMotion || IS_MOBILE || (DEVICE_MEMORY_GB && DEVICE_MEMORY_GB <= 4) || (CPU_CORES && CPU_CORES <= 4);
-const TARGET_FPS = LOW_POWER ? 30 : 45;
+const LOW_POWER =
+  prefersReducedMotion ||
+  IS_MOBILE ||
+  (DEVICE_MEMORY_GB && DEVICE_MEMORY_GB <= 4) ||
+  (CPU_CORES && CPU_CORES <= 4);
+// 性能优先：默认就锁 30fps（对大多数设备流畅度够用，但能显著降 CPU/GPU 占用）
+const TARGET_FPS = LOW_POWER ? 24 : 30;
 
 let fw = null;
 let ambientFireworksTimer = null;
@@ -137,7 +142,8 @@ class FireworksEngine {
 
   resize() {
     if (!this.canvas || !this.ctx) return;
-    const dprCap = LOW_POWER ? 1.25 : 1.75;
+    // 烟花层 GPU 负担也不小：把像素比上限压低，肉眼几乎看不出但性能提升明显
+    const dprCap = LOW_POWER ? 1.0 : 1.25;
     const dpr = Math.min(dprCap, window.devicePixelRatio || 1);
     const w = Math.max(1, Math.floor(window.innerWidth));
     const h = Math.max(1, Math.floor(window.innerHeight));
@@ -998,7 +1004,8 @@ function initThreeOnce() {
     alpha: true,
     powerPreference: LOW_POWER ? "low-power" : "high-performance",
   });
-  const dprCap = LOW_POWER ? 1.15 : 1.6;
+  // 3D 是最大性能开销：像素比上限压低，明显减卡
+  const dprCap = LOW_POWER ? 1.0 : 1.25;
   renderer.setPixelRatio(Math.min(dprCap, window.devicePixelRatio || 1));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   // 透明背景：让底下的烟花层“透”出来（更像视频那种天空烟花）
@@ -1031,7 +1038,7 @@ function initThreeOnce() {
   scene.add(treeGroup);
 
   // 3D 下雪效果（粒子系统）
-  const snowCount = LOW_POWER ? 160 : 280;
+  const snowCount = LOW_POWER ? 90 : 180;
   const snowGeometry = new THREE.BufferGeometry();
   const positions = new Float32Array(snowCount * 3);
   const velocities = new Float32Array(snowCount);
@@ -1107,7 +1114,7 @@ function initThreeOnce() {
     if (!three.ready) return;
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const dprCap = LOW_POWER ? 1.15 : 1.6;
+    const dprCap = LOW_POWER ? 1.0 : 1.25;
     three.renderer.setPixelRatio(Math.min(dprCap, window.devicePixelRatio || 1));
     three.renderer.setSize(w, h, false);
     three.camera.aspect = w / h;
