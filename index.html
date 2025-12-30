@@ -5,11 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="圣诞节的小惊喜：3D 圣诞树自动旋转，划动有特效，点苹果收集解锁合照。" />
     <title>圣诞节快乐</title>
-    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./style.css?v=20251230" />
   </head>
   <body>
     <div id="snow" aria-hidden="true"></div>
-    <div id="fx" aria-hidden="true"></div>
+    <div id="fx" aria-hidden="true">
+      <canvas id="fxCanvas" aria-hidden="true"></canvas>
+    </div>
+    <div id="uiFx" aria-hidden="true"></div>
 
     <main class="app" role="main">
       <!-- 首屏：微信里需要一次用户点击来“开始” -->
@@ -49,7 +52,7 @@
           <p class="subtitle" id="greetingSub">这个冬天也要一直开心呀</p>
 
           <div class="photoFrame photoFrame--solo">
-            <img id="photo" class="photo" alt="我们的合照" loading="eager" />
+            <img id="photo" class="photo" alt="我们的合照" />
             <div id="photoFallback" class="photoFallback is-hidden">
               <div class="fallbackTitle">把合照放进来就完成啦</div>
               <div class="fallbackSub">把文件放到 <code>photos/</code>，再改一下 <code>script.js</code> 里的合照文件名</div>
@@ -70,17 +73,53 @@
       </footer>
     </main>
 
-    <!-- 背景音乐：satisfaction -->
+    <!-- 可选背景音乐：放到 assets/bgm.mp3；微信不支持自动播，需要用户点“开始”后再播放 -->
     <audio id="bgm" preload="auto" loop>
-      <!-- 优先使用本地文件 -->
-      <source src="./assets/satisfaction.mp3" type="audio/mpeg" />
-      <!-- 如果没有本地文件，使用免费的圣诞音乐（备用） -->
-      <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg" />
+      <source src="./assets/bgm.mp3" type="audio/mpeg" />
     </audio>
 
-    <!-- Three.js（3D 渲染） -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-    <script src="./script.js"></script>
+    <!-- Three.js（3D 渲染，带 CDN 兜底） + 主脚本 -->
+    <script>
+      (function () {
+        var BUILD = "20251230";
+        var threeSources = [
+          "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js",
+          "https://unpkg.com/three@0.160.0/build/three.min.js",
+          "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js",
+        ];
+
+        function loadScript(src, cb) {
+          var s = document.createElement("script");
+          s.src = src;
+          s.async = false;
+          s.onload = function () {
+            cb && cb(null);
+          };
+          s.onerror = function () {
+            cb && cb(new Error("load failed: " + src));
+          };
+          document.head.appendChild(s);
+        }
+
+        function loadApp() {
+          loadScript("./script.js?v=" + BUILD, function () {});
+        }
+
+        function loadThree(i) {
+          if (i >= threeSources.length) {
+            console.warn("[christmas-surprise] Three.js 加载失败，继续加载主脚本（会自动降级）");
+            loadApp();
+            return;
+          }
+          loadScript(threeSources[i], function (err) {
+            if (err) return loadThree(i + 1);
+            loadApp();
+          });
+        }
+
+        loadThree(0);
+      })();
+    </script>
   </body>
 </html>
 

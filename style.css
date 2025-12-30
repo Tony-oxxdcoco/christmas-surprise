@@ -34,6 +34,8 @@ body{
   flex-direction:column;
   align-items:center;
   padding: 18px 14px 70px;
+  position: relative;
+  z-index: 2; /* UI 在烟花层之上 */
 }
 
 .panel{
@@ -53,7 +55,7 @@ body{
 .treePanel{
   position: fixed;
   inset: 0;
-  z-index: 2;
+  z-index: 3; /* 树在最上层；烟花通过透明背景“透出来” */
 }
 .treeStage{
   position:absolute;
@@ -463,7 +465,7 @@ body::before{
 }
 
 /* 雪花 */
-#snow{position:fixed; inset:0; pointer-events:none; overflow:hidden}
+#snow{position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:0}
 .flake{
   position:absolute;
   top: -10vh;
@@ -484,7 +486,17 @@ body::before{
 }
 
 /* 小心心/烟花粒子层 */
-#fx{position:fixed; inset:0; pointer-events:none}
+#fx{position:fixed; inset:0; pointer-events:none; z-index:1}
+#fxCanvas{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  display:block;
+}
+
+/* UI 顶层小特效（❤/✨/DOM 兜底烟花） */
+#uiFx{position:fixed; inset:0; pointer-events:none; z-index:6}
 .pop{
   position:absolute;
   transform: translate(-50%,-50%);
@@ -505,6 +517,8 @@ body::before{
   transform: translate(-50%,-50%);
   animation: spark 900ms ease-out forwards;
   opacity:.95;
+  box-shadow: 0 0 14px rgba(255,255,255,.45);
+  filter: saturate(1.25);
 }
 @keyframes spark{
   to{
