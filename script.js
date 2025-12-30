@@ -18,7 +18,7 @@ const CONFIG = {
 
 // 线上排查用：打开控制台看这个版本号，就能确认是不是最新代码
 //（发布到 GitHub Pages 后，如果还是旧版本，说明页面还没更新或被缓存）
-window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30e";
+window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30f";
 console.log("[christmas-surprise] build:", window.__CHRISTMAS_SURPRISE_BUILD__);
 
 const $ = (sel) => document.querySelector(sel);
@@ -607,8 +607,13 @@ function renderPhoto() {
     return;
   }
 
-  // 用绝对 URL 构造，避免 GitHub Pages 子路径/缓存导致的相对路径问题
-  const src = new URL(`photos/${encodeURIComponent(name)}`, window.location.href).toString();
+  // 用“带尾斜杠”的 base URL 构造，避免有人打开 `.../christmas-surprise`（没 /）
+  // 导致相对路径被解析到父目录，从而 404
+  const base = new URL(window.location.href);
+  base.hash = "";
+  base.search = "";
+  if (!base.pathname.endsWith("/")) base.pathname += "/";
+  const src = new URL(`photos/${encodeURIComponent(name)}`, base).toString();
   photoEl.style.display = "block";
   photoFallbackEl.classList.add("is-hidden");
 
@@ -945,6 +950,39 @@ function buildTree() {
   beads.instanceColor.needsUpdate = true;
   group.add(beads);
   group.userData.garland = beads;
+  group.userData.garlandMat = beadMat;
+
+  // 柔和光晕（一个 Sprite，几乎不增加 draw call）
+  if (!LOW_POWER) {
+    const glowCanvas = document.createElement("canvas");
+    glowCanvas.width = 128;
+    glowCanvas.height = 128;
+    const gctx = glowCanvas.getContext("2d");
+    if (gctx) {
+      const grd = gctx.createRadialGradient(64, 64, 6, 64, 64, 64);
+      grd.addColorStop(0.0, "rgba(255,134,188,0.55)");
+      grd.addColorStop(0.35, "rgba(34,199,169,0.28)");
+      grd.addColorStop(0.7, "rgba(255,224,102,0.18)");
+      grd.addColorStop(1.0, "rgba(255,255,255,0)");
+      gctx.fillStyle = grd;
+      gctx.fillRect(0, 0, 128, 128);
+      const tex = new THREE.CanvasTexture(glowCanvas);
+      tex.needsUpdate = true;
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.65,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      sprite.position.set(0, 1.35, -0.6);
+      sprite.scale.set(3.2, 3.2, 1);
+      group.add(sprite);
+      group.userData.glow = sprite;
+    }
+  }
 
   // 星星：更可爱（带小表情）
   const starGroup = new THREE.Group();
@@ -1269,6 +1307,16 @@ function startRenderLoop() {
       const s = 1 + Math.sin(t * 2.2) * 0.06;
       star.scale.setScalar(s);
       star.rotation.y = t * 0.5;  // 缓慢旋转
+    }
+
+    // 糖串彩灯轻微呼吸（不更新每颗灯颜色，只动材质发光强度，几乎无开销）
+    if (!LOW_POWER && three.treeGroup?.userData?.garlandMat) {
+      const t = performance.now() * 0.001;
+      const pulse = 0.78 + Math.sin(t * 1.6) * 0.18;
+      three.treeGroup.userData.garlandMat.emissiveIntensity = pulse;
+      if (three.treeGroup.userData.glow) {
+        three.treeGroup.userData.glow.material.opacity = 0.55 + Math.sin(t * 1.2) * 0.08;
+      }
     }
 
     // 3D 下雪动画（修复bug）
