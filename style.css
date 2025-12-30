@@ -486,7 +486,8 @@ body::before{
 }
 
 /* 小心心/烟花粒子层 */
-#fx{position:fixed; inset:0; pointer-events:none; z-index:1}
+/* 烟花必须在树之上（部分设备 WebGL canvas 透明合成不稳定，放下面会“看不到”） */
+#fx{position:fixed; inset:0; pointer-events:none; z-index:4}
 #fxCanvas{
   position:absolute;
   inset:0;

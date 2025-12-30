@@ -18,7 +18,7 @@ const CONFIG = {
 
 // 线上排查用：打开控制台看这个版本号，就能确认是不是最新代码
 //（发布到 GitHub Pages 后，如果还是旧版本，说明页面还没更新或被缓存）
-window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30";
+window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30b";
 console.log("[christmas-surprise] build:", window.__CHRISTMAS_SURPRISE_BUILD__);
 
 const $ = (sel) => document.querySelector(sel);
@@ -1214,11 +1214,16 @@ function startRenderLoop() {
 
   let lastRenderAt = 0;
   let snowFrame = 0;
+  // 缓存星星对象，避免每帧遍历 children（省一点 CPU）
+  if (!three.star) {
+    three.star = three.treeGroup?.children?.find?.((o) => o.userData?.isStar) || null;
+  }
 
   const tick = (tNow) => {
     three.animId = requestAnimationFrame(tick);
     if (!three.ready) return;
 
+    if (typeof tNow !== "number") return;
     if (!lastRenderAt) lastRenderAt = tNow;
     const minGap = 1000 / TARGET_FPS;
     if (tNow - lastRenderAt < minGap) return;
@@ -1235,7 +1240,7 @@ function startRenderLoop() {
     }
 
     // 让星星微微呼吸和旋转
-    const star = three.treeGroup?.children?.find?.((o) => o.userData?.isStar);
+    const star = three.star;
     if (star) {
       const t = performance.now() * 0.001;
       const s = 1 + Math.sin(t * 2.2) * 0.06;
@@ -1282,7 +1287,7 @@ function startRenderLoop() {
 
     three.renderer.render(three.scene, three.camera);
   };
-  tick();
+  three.animId = requestAnimationFrame(tick);
 }
 
 // ========= 事件绑定 =========
