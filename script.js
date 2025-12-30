@@ -643,18 +643,19 @@ function stopAmbientFireworks() {
 }
 
 function startAmbientFireworks() {
-  if (prefersReducedMotion) return;
+  // 性能优先：树界面背景烟花是额外开销，低配设备直接关闭
+  if (prefersReducedMotion || LOW_POWER) return;
   stopAmbientFireworks();
   // 树界面的“背景烟花节奏”：别太密，保持高级感
   ambientFireworksTimer = setInterval(() => {
     if (!fw) return;
     if (!elTree || elTree.classList.contains("is-hidden")) return;
-    if (Math.random() < 0.32) {
+    if (Math.random() < 0.18) {
       const x = window.innerWidth * (0.22 + Math.random() * 0.56);
       const y = window.innerHeight * (0.06 + Math.random() * 0.24);
       fw.rocketTo(x, y, 1.05);
     }
-  }, 1500);
+  }, 2200);
 }
 
 async function unlockReward() {
@@ -664,6 +665,7 @@ async function unlockReward() {
   show(elReward);
   stopAmbientFireworks();
   setSnowEnabled(true);
+  stopRenderLoop();
 
   if (greetingTitleEl) greetingTitleEl.textContent = CONFIG.greetingTitle || "圣诞节快乐";
   if (greetingSubEl) greetingSubEl.textContent = CONFIG.greetingSub || "";
@@ -686,6 +688,7 @@ function goToTree() {
   // 树模式下已经有 3D 雪，暂停 DOM 雪（避免双倍动画/节点导致卡顿）
   setSnowEnabled(false);
   startAmbientFireworks();
+  if (three.ready) startRenderLoop();
 }
 
 // ========= 3D 圣诞树（Three.js） =========
@@ -1288,6 +1291,11 @@ function startRenderLoop() {
     three.renderer.render(three.scene, three.camera);
   };
   three.animId = requestAnimationFrame(tick);
+}
+
+function stopRenderLoop() {
+  if (three.animId) cancelAnimationFrame(three.animId);
+  three.animId = null;
 }
 
 // ========= 事件绑定 =========
