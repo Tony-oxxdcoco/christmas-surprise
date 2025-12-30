@@ -18,7 +18,7 @@ const CONFIG = {
 
 // 线上排查用：打开控制台看这个版本号，就能确认是不是最新代码
 //（发布到 GitHub Pages 后，如果还是旧版本，说明页面还没更新或被缓存）
-window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30h";
+window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30i";
 console.log("[christmas-surprise] build:", window.__CHRISTMAS_SURPRISE_BUILD__);
 
 const $ = (sel) => document.querySelector(sel);
@@ -62,8 +62,8 @@ const LOW_POWER =
   IS_MOBILE ||
   (DEVICE_MEMORY_GB && DEVICE_MEMORY_GB <= 4) ||
   (CPU_CORES && CPU_CORES <= 4);
-// 性能优先：默认就锁 30fps（对大多数设备流畅度够用，但能显著降 CPU/GPU 占用）
-const TARGET_FPS = LOW_POWER ? 24 : 30;
+// 性能优先：保持 30fps，但通过更激进的降像素比/减光照来确保稳定不掉帧
+const TARGET_FPS = 30;
 
 let fw = null;
 let ambientFireworksTimer = null;
@@ -181,8 +181,8 @@ class FireworksEngine {
 
   resize() {
     if (!this.canvas || !this.ctx) return;
-    // 烟花层 GPU 负担也不小：把像素比上限压低，肉眼几乎看不出但性能提升明显
-    const dprCap = LOW_POWER ? 1.0 : 1.25;
+    // 烟花层 GPU 负担也不小：直接锁 1.0，显著提升低配设备流畅度
+    const dprCap = 1.0;
     const dpr = Math.min(dprCap, window.devicePixelRatio || 1);
     const w = Math.max(1, Math.floor(window.innerWidth));
     const h = Math.max(1, Math.floor(window.innerHeight));
@@ -543,6 +543,11 @@ function initFireworks() {
 
 // ========= 可爱氛围：雪花 + 粒子 =========
 function spawnFlake() {
+  // 限制 DOM 节点数量，避免长时间运行卡顿
+  try {
+    const limit = LOW_POWER ? 28 : 55;
+    if (snowLayer && snowLayer.childElementCount >= limit) return;
+  } catch {}
   const flake = document.createElement("div");
   flake.className = "flake";
   const left = Math.random() * 100;
@@ -697,8 +702,6 @@ function startCelebration() {
     // 更大更亮但不密：次数更少，每次更“炸”
     if (fw) fw.rocketTo(x, y, 1.65);
     else fireworksBurst(x, y, 1.35);
-    spawnFlake();
-    spawnFlake();
     if (bursts >= 5) {
       clearInterval(celebrateTimer);
       celebrateTimer = null;
@@ -858,6 +861,14 @@ function spawnApples() {
     metalness: 0.0,
   });
 
+  // 让苹果“贴着树表面”：按树叶锥体表面半径生成坐标（避免埋进树里/离树太远悬浮）
+  const leafCones = [
+    { y: 0.78, r: 1.10, h: 1.05 },
+    { y: 1.22, r: 0.92, h: 0.90 },
+    { y: 1.60, r: 0.74, h: 0.75 },
+    { y: 1.92, r: 0.56, h: 0.58 },
+  ];
+
   for (let i = 0; i < goal; i++) {
     const apple = new THREE.Group();
     apple.userData.isApple = true;
@@ -889,18 +900,18 @@ function spawnApples() {
     apple.add(hitBox);
     apple.userData.hitBox = hitBox;
 
-    // 随机放在树上：根据树轮廓估一个半径（适配新树更圆润的轮廓）
-    const yMin = 0.92;
-    const yMax = 2.08;
-    const y = yMin + Math.random() * (yMax - yMin);
-    const t = (y - yMin) / (yMax - yMin); // 0..1
-    // 更“贴表面”：半径整体外移，避免苹果埋进树里
-    const radius = (1.22 * (1 - t) + 0.34) * 0.98;
+    // 选一个锥体层，按该锥体表面半径放置
+    const cone = leafCones[Math.floor(Math.random() * leafCones.length)];
+    // u: 0 底部 -> 1 顶部；苹果更偏外侧：u 不要太大
+    // 避免太靠近尖端（半径太小+外移会显得悬浮）
+    const u = 0.10 + Math.random() * 0.58;
+    const yLocal = u * cone.h - cone.h / 2;
+    const y = cone.y + yLocal;
+    const rSurf = cone.r * (1 - u);
+    // 外移过大会显得“悬浮”，这里缩小一点，但仍保证不埋进树里
+    const r = rSurf + 0.06;
     const ang = Math.random() * Math.PI * 2;
-    apple.position.set(Math.cos(ang) * radius, y, Math.sin(ang) * radius);
-
-    // 确保苹果在树外，更容易点到
-    apple.position.multiplyScalar(1.08);
+    apple.position.set(Math.cos(ang) * r, y, Math.sin(ang) * r);
     apple.rotation.set(Math.random() * 0.22 - 0.11, Math.random() * Math.PI * 2, Math.random() * 0.22 - 0.11);
     apple.scale.setScalar(1);
 
@@ -1084,6 +1095,7 @@ function buildTree() {
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = 0.02;
   group.add(ground);
+  group.userData.ground = ground;
 
   group.position.y = -0.06;
   return group;
@@ -1098,12 +1110,12 @@ function initThreeOnce() {
 
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: !LOW_POWER,
+    antialias: false,
     alpha: true,
-    powerPreference: LOW_POWER ? "low-power" : "high-performance",
+    powerPreference: "low-power",
   });
   // 3D 是最大性能开销：像素比上限压低，明显减卡
-  const dprCap = LOW_POWER ? 1.0 : 1.25;
+  const dprCap = 1.0;
   renderer.setPixelRatio(Math.min(dprCap, window.devicePixelRatio || 1));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   // 透明背景：让底下的烟花层“透”出来（更像视频那种天空烟花）
@@ -1112,31 +1124,26 @@ function initThreeOnce() {
   const scene = new THREE.Scene();
   // 背景透明（搭配 fog 仍然有“空气感”）
   scene.background = null;
-  scene.fog = new THREE.Fog(0xe8f4f8, 6, 14);
+  // 雾会增加片元计算量：这里关掉，换更轻的清爽观感
+  scene.fog = null;
 
   const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 40);
   camera.position.set(0, 1.55, 4.2);
   camera.lookAt(0, 1.2, 0);
 
-  // 光照：柔和、偏节日
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-  const hemi = new THREE.HemisphereLight(0xffffff, 0xcfefff, 0.55);
+  // 光照：减负（减少灯光数量能明显提升部分设备流畅度）
+  scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+  const hemi = new THREE.HemisphereLight(0xffffff, 0xd8f2ff, 0.55);
   scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xffffff, 0.85);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.55);
   dir.position.set(2.2, 4.6, 2.8);
   scene.add(dir);
-  const pink = new THREE.PointLight(0xff86bc, 0.8, 12);
-  pink.position.set(-2.2, 2.4, 2.2);
-  scene.add(pink);
-  const mint = new THREE.PointLight(0x22c7a9, 0.65, 12);
-  mint.position.set(2.4, 2.1, -2.2);
-  scene.add(mint);
 
   const treeGroup = buildTree();
   scene.add(treeGroup);
 
-  // 3D 下雪效果（粒子系统）
-  const snowCount = LOW_POWER ? 90 : 180;
+  // 3D 下雪效果（粒子系统）——为了流畅度，这里默认关闭（保留 DOM 雪即可）
+  const snowCount = 0;
   const snowGeometry = new THREE.BufferGeometry();
   const positions = new Float32Array(snowCount * 3);
   const velocities = new Float32Array(snowCount);
@@ -1153,22 +1160,24 @@ function initThreeOnce() {
     driftZ[i] = (Math.random() - 0.5) * 0.008;
   }
   
-  snowGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  
-  const snowMaterial = new THREE.PointsMaterial({
-    color: 0xffffff,
-    size: LOW_POWER ? 0.12 : 0.15,
-    transparent: true,
-    opacity: LOW_POWER ? 0.7 : 0.8,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  
-  const snowParticles = new THREE.Points(snowGeometry, snowMaterial);
-  snowParticles.userData.velocities = velocities;  // 保存速度数组
-  snowParticles.userData.driftX = driftX;
-  snowParticles.userData.driftZ = driftZ;
-  scene.add(snowParticles);
+  let snowParticles = null;
+  let snowMaterial = null;
+  if (snowCount > 0) {
+    snowGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    snowMaterial = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 0.13,
+      transparent: true,
+      opacity: 0.78,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    snowParticles = new THREE.Points(snowGeometry, snowMaterial);
+    snowParticles.userData.velocities = velocities;
+    snowParticles.userData.driftX = driftX;
+    snowParticles.userData.driftZ = driftZ;
+    scene.add(snowParticles);
+  }
 
   three.renderer = renderer;
   three.scene = scene;
@@ -1212,7 +1221,7 @@ function initThreeOnce() {
     if (!three.ready) return;
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const dprCap = LOW_POWER ? 1.0 : 1.25;
+    const dprCap = 1.0;
     three.renderer.setPixelRatio(Math.min(dprCap, window.devicePixelRatio || 1));
     three.renderer.setSize(w, h, false);
     three.camera.aspect = w / h;
@@ -1295,7 +1304,16 @@ function startAppleFall(apple) {
 
   const vel = new THREE.Vector3((Math.random() - 0.5) * 0.55, 0.25, (Math.random() - 0.5) * 0.55);
   const ang = new THREE.Vector3((Math.random() - 0.5) * 5.5, (Math.random() - 0.5) * 7.0, (Math.random() - 0.5) * 5.5);
-  const groundY = (three.treeGroup.position?.y || 0) + 0.04;
+  // 用雪地圆盘的真实世界坐标作为落地高度，避免“半空停住/悬浮”
+  let groundY = (three.treeGroup.position?.y || 0) + 0.04;
+  try {
+    const ground = three.treeGroup.userData?.ground;
+    if (ground) {
+      const gp = new THREE.Vector3();
+      ground.getWorldPosition(gp);
+      groundY = gp.y + 0.035;
+    }
+  } catch {}
 
   three.fallingApples.push({
     obj: apple,
