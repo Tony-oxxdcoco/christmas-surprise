@@ -18,7 +18,7 @@ const CONFIG = {
 
 // 线上排查用：打开控制台看这个版本号，就能确认是不是最新代码
 //（发布到 GitHub Pages 后，如果还是旧版本，说明页面还没更新或被缓存）
-window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30d";
+window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30e";
 console.log("[christmas-surprise] build:", window.__CHRISTMAS_SURPRISE_BUILD__);
 
 const $ = (sel) => document.querySelector(sel);
@@ -598,6 +598,7 @@ function swipeTrail(x, y) {
 
 // ========= 奖励：合照 + 祝福 =========
 function renderPhoto() {
+  if (!photoEl || !photoFallbackEl) return;
   const name = CONFIG.photo;
   if (!name) {
     photoEl.src = "";
@@ -606,16 +607,20 @@ function renderPhoto() {
     return;
   }
 
-  const src = `./photos/${name}`;
+  // 用绝对 URL 构造，避免 GitHub Pages 子路径/缓存导致的相对路径问题
+  const src = new URL(`photos/${encodeURIComponent(name)}`, window.location.href).toString();
   photoEl.style.display = "block";
   photoFallbackEl.classList.add("is-hidden");
-  photoEl.src = src;
 
   photoEl.onerror = () => {
     photoEl.onerror = null;
     photoEl.style.display = "none";
     photoFallbackEl.classList.remove("is-hidden");
   };
+
+  photoEl.decoding = "async";
+  photoEl.loading = "eager";
+  photoEl.src = src;
 }
 
 function startCelebration() {
@@ -719,6 +724,7 @@ let three = {
   snowParticles: null,  // 下雪粒子系统
   snowGeometry: null,
   snowMaterial: null,
+  star: null,
 };
 
 function hasWebGL() {
@@ -755,41 +761,85 @@ function resetApples() {
 function spawnApples() {
   const THREE = window.THREE;
   const goal = Math.max(1, CONFIG.applesToCollect || 5);
-  // 增大苹果尺寸，更容易点到
-  const appleSeg = LOW_POWER ? 16 : 24;
-  const geo = new THREE.SphereGeometry(0.18, appleSeg, appleSeg);
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xff3b6f,
-    roughness: 0.2,
-    metalness: 0.15,
-    emissive: 0xff3b6f,
-    emissiveIntensity: 0.4,  // 更亮，更容易看到
+  // 可爱苹果：主果体 + 高光 + 叶子 + 小梗（数量少但更精致）
+  const seg = LOW_POWER ? 12 : 16;
+  const bodyGeo = new THREE.SphereGeometry(0.16, seg, seg);
+  const hlGeo = new THREE.SphereGeometry(0.05, 10, 10);
+  const leafGeo = new THREE.ConeGeometry(0.05, 0.12, 10);
+  const stemGeo = new THREE.CylinderGeometry(0.018, 0.022, 0.10, 10);
+
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0xff4fa3,
+    roughness: 0.25,
+    metalness: 0.05,
+    emissive: 0xff4fa3,
+    emissiveIntensity: 0.25,
+  });
+  const hlMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.05,
+    metalness: 0.0,
+    emissive: 0xffffff,
+    emissiveIntensity: 0.35,
+    transparent: true,
+    opacity: 0.7,
+  });
+  const leafMat = new THREE.MeshStandardMaterial({
+    color: 0x37d6a5,
+    roughness: 0.55,
+    metalness: 0.0,
+    emissive: 0x37d6a5,
+    emissiveIntensity: 0.08,
+  });
+  const stemMat = new THREE.MeshStandardMaterial({
+    color: 0x8b5a3c,
+    roughness: 0.9,
+    metalness: 0.0,
   });
 
   for (let i = 0; i < goal; i++) {
-    const apple = new THREE.Mesh(geo, mat.clone());
+    const apple = new THREE.Group();
     apple.userData.isApple = true;
     apple.userData.collected = false;
     apple.userData.pop = 0;
+
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.scale.set(1, 1.08, 1); // 轻微拉长，更像“Q版苹果”
+    apple.add(body);
+
+    const hl = new THREE.Mesh(hlGeo, hlMat);
+    hl.position.set(0.06, 0.06, 0.06);
+    apple.add(hl);
+
+    const stem = new THREE.Mesh(stemGeo, stemMat);
+    stem.position.set(0.0, 0.16, 0.0);
+    apple.add(stem);
+
+    const leaf = new THREE.Mesh(leafGeo, leafMat);
+    leaf.position.set(0.05, 0.19, 0.0);
+    leaf.rotation.z = Math.PI * 0.55;
+    apple.add(leaf);
     
     // 增大碰撞体积：添加一个更大的不可见碰撞体
     const hitBox = new THREE.Mesh(
-      new THREE.SphereGeometry(0.25, 16, 16),
+      new THREE.SphereGeometry(0.26, 12, 12),
       new THREE.MeshBasicMaterial({ visible: false })
     );
     apple.add(hitBox);
     apple.userData.hitBox = hitBox;
 
-    // 随机放在树上：越往上半径越小，但确保在可见位置
-    const y = 0.7 + Math.random() * 1.6;
-    const t = (y - 0.7) / 1.6; // 0..1
-    const radius = 1.15 * (1 - t) * 0.98;  // 稍微外移
+    // 随机放在树上：根据树轮廓估一个半径（适配新树更圆润的轮廓）
+    const yMin = 0.9;
+    const yMax = 2.25;
+    const y = yMin + Math.random() * (yMax - yMin);
+    const t = (y - yMin) / (yMax - yMin); // 0..1
+    const radius = (1.05 * (1 - t) + 0.15) * 0.95;
     const ang = Math.random() * Math.PI * 2;
     apple.position.set(Math.cos(ang) * radius, y, Math.sin(ang) * radius);
 
     // 确保苹果在树外，更容易点到
-    apple.position.multiplyScalar(1.08);
-    apple.rotation.set(Math.random() * 0.5, Math.random() * 0.5, Math.random() * 0.5);
+    apple.position.multiplyScalar(1.05);
+    apple.rotation.set(Math.random() * 0.22 - 0.11, Math.random() * Math.PI * 2, Math.random() * 0.22 - 0.11);
     apple.scale.setScalar(1);
 
     three.apples.push(apple);
@@ -800,194 +850,147 @@ function spawnApples() {
 function buildTree() {
   const THREE = window.THREE;
 
+  // 更可爱、低多边形、对象更少（更省性能）
   const group = new THREE.Group();
   const SEG = LOW_POWER
-    ? { cone: 24, branchCone: 16, bulb: 14, ornament: 16, trunk: 16, ground: 48 }
-    : { cone: 36, branchCone: 24, bulb: 20, ornament: 24, trunk: 24, ground: 64 };
+    ? { cone: 16, trunk: 12, bead: 9, ground: 36 }
+    : { cone: 22, trunk: 16, bead: 11, ground: 52 };
 
-  // 树干（更精致，有纹理感）
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.16, 0.22, 0.65, SEG.trunk),
-    new THREE.MeshStandardMaterial({ 
-      color: 0x6b4423, 
-      roughness: 0.85,
-      metalness: 0.1
-    })
+  function applyYGradient(geo, topColor, bottomColor) {
+    geo.computeBoundingBox();
+    const bbox = geo.boundingBox;
+    const y0 = bbox.min.y;
+    const y1 = bbox.max.y;
+    const span = Math.max(0.0001, y1 - y0);
+    const pos = geo.attributes.position;
+    const cols = new Float32Array(pos.count * 3);
+    const cTop = new THREE.Color(topColor);
+    const cBot = new THREE.Color(bottomColor);
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      const t = (y - y0) / span;
+      const c = cBot.clone().lerp(cTop, t);
+      cols[i * 3 + 0] = c.r;
+      cols[i * 3 + 1] = c.g;
+      cols[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
+    return geo;
+  }
+
+  // 树干：更“Q”，带渐变更可爱
+  const trunkGeo = applyYGradient(
+    new THREE.CylinderGeometry(0.20, 0.26, 0.62, SEG.trunk),
+    0x6b4423,
+    0x9a6a4b
   );
-  trunk.position.y = 0.32;
-  trunk.castShadow = true;
+  const trunk = new THREE.Mesh(
+    trunkGeo,
+    new THREE.MeshLambertMaterial({ vertexColors: true })
+  );
+  trunk.position.y = 0.28;
   group.add(trunk);
 
-  // 树叶层（5层，更精致有层次，使用更自然的绿色渐变）
+  // 树叶：更圆润的 4 层“棉花糖松树”，渐变+少面数
+  const leafMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const layers = [
-    { y: 0.85, r: 1.35, h: 1.3, c: 0x2ecf9f },  // 底层最大
-    { y: 1.35, r: 1.15, h: 1.1, c: 0x26c08f },
-    { y: 1.75, r: 0.95, h: 0.95, c: 0x1eb17f },
-    { y: 2.1, r: 0.75, h: 0.8, c: 0x16a26f },
-    { y: 2.4, r: 0.55, h: 0.65, c: 0x0e935f },  // 顶层最小
+    { y: 0.78, r: 1.10, h: 1.05, top: 0x46f3c8, bot: 0x169a78 },
+    { y: 1.22, r: 0.92, h: 0.90, top: 0x3aeac0, bot: 0x118d6d },
+    { y: 1.60, r: 0.74, h: 0.75, top: 0x34deb6, bot: 0x0f7e63 },
+    { y: 1.92, r: 0.56, h: 0.58, top: 0x2fd4ae, bot: 0x0c6f58 },
   ];
-  
-  layers.forEach((layer, idx) => {
-    // 每层用多个小锥体组合，更有层次感
-    const layerGroup = new THREE.Group();
-    
-    // 主锥体
-    const main = new THREE.Mesh(
-      new THREE.ConeGeometry(layer.r, layer.h, SEG.cone),
-      new THREE.MeshStandardMaterial({
-        color: layer.c,
-        roughness: 0.35,
-        metalness: 0.08,
-        emissive: layer.c,
-        emissiveIntensity: 0.12,
-      })
-    );
-    main.position.y = 0;
-    main.castShadow = true;
-    layerGroup.add(main);
-    
-    // 添加一些小的装饰性分支（让树更自然）
-    if (idx < 3) {
-      for (let i = 0; i < 3; i++) {
-        const branch = new THREE.Mesh(
-          new THREE.ConeGeometry(layer.r * 0.3, layer.h * 0.4, SEG.branchCone),
-          new THREE.MeshStandardMaterial({
-            color: layer.c,
-            roughness: 0.4,
-            metalness: 0.05,
-          })
-        );
-        const angle = (Math.PI * 2 * i) / 3;
-        branch.position.set(
-          Math.cos(angle) * layer.r * 0.6,
-          layer.h * 0.2,
-          Math.sin(angle) * layer.r * 0.6
-        );
-        branch.rotation.z = Math.sin(angle) * 0.3;
-        layerGroup.add(branch);
-      }
-    }
-    
-    layerGroup.position.y = layer.y;
-    group.add(layerGroup);
+  layers.forEach((L, i) => {
+    const geo = applyYGradient(new THREE.ConeGeometry(L.r, L.h, SEG.cone), L.top, L.bot);
+    const m = new THREE.Mesh(geo, leafMat);
+    m.position.y = L.y;
+    m.rotation.y = i * 0.55;
+    group.add(m);
   });
 
-  // 星星（更精致，多层设计）
+  // 创新点：发光“糖串”彩灯（InstancedMesh：一个 drawcall）
+  const beadCount = LOW_POWER ? 32 : 48;
+  const beadGeo = new THREE.SphereGeometry(0.055, SEG.bead, SEG.bead);
+  const beadMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.25,
+    metalness: 0.1,
+    emissive: 0xffffff,
+    emissiveIntensity: 0.95,
+    vertexColors: true,
+  });
+  const beads = new THREE.InstancedMesh(beadGeo, beadMat, beadCount);
+  beads.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+  for (let i = 0; i < beadCount; i++) {
+    const t = i / beadCount;
+    const turns = 2.6;
+    const ang = t * Math.PI * 2 * turns;
+    const y = 0.95 + t * 1.20;
+    const taper = 1 - t;
+    const radius = (0.95 * taper + 0.25) * 0.95;
+    const x = Math.cos(ang) * radius;
+    const z = Math.sin(ang) * radius;
+    const s = 0.92 + Math.random() * 0.18;
+    const mtx = new THREE.Matrix4();
+    mtx.compose(
+      new THREE.Vector3(x, y, z),
+      new THREE.Quaternion(),
+      new THREE.Vector3(s, s, s)
+    );
+    beads.setMatrixAt(i, mtx);
+    const hue = (185 + t * 160 + Math.random() * 24) % 360;
+    const c = new THREE.Color().setHSL(hue / 360, 0.95, 0.68);
+    beads.setColorAt(i, c);
+  }
+  beads.instanceColor.needsUpdate = true;
+  group.add(beads);
+  group.userData.garland = beads;
+
+  // 星星：更可爱（带小表情）
   const starGroup = new THREE.Group();
-  
-  // 外层大星星
   const starOuter = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.2, 0),
+    new THREE.OctahedronGeometry(0.22, 0),
     new THREE.MeshStandardMaterial({
       color: 0xffe066,
-      roughness: 0.1,
-      metalness: 0.8,
+      roughness: 0.25,
+      metalness: 0.45,
       emissive: 0xffe066,
-      emissiveIntensity: 1.0,
+      emissiveIntensity: 0.85,
     })
   );
   starGroup.add(starOuter);
-  
-  // 内层小星星（旋转）
-  const starInner = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.12, 0),
-    new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.05,
-      metalness: 0.9,
-      emissive: 0xffffff,
-      emissiveIntensity: 0.8,
-    })
+
+  const faceMat = new THREE.MeshBasicMaterial({ color: 0x1f2430 });
+  const eyeGeo = new THREE.SphereGeometry(0.03, 10, 10);
+  const leftEye = new THREE.Mesh(eyeGeo, faceMat);
+  const rightEye = new THREE.Mesh(eyeGeo, faceMat);
+  leftEye.position.set(-0.06, 0.02, 0.17);
+  rightEye.position.set(0.06, 0.02, 0.17);
+  starGroup.add(leftEye, rightEye);
+
+  const smile = new THREE.Mesh(
+    new THREE.TorusGeometry(0.06, 0.012, 8, 24, Math.PI),
+    faceMat
   );
-  starGroup.add(starInner);
-  
-  starGroup.position.y = 2.75;
+  smile.rotation.x = Math.PI / 2;
+  smile.position.set(0, -0.04, 0.17);
+  starGroup.add(smile);
+
+  starGroup.position.y = 2.35;
   starGroup.userData.isStar = true;
+  starGroup.userData.face = { leftEye, rightEye };
   group.add(starGroup);
 
-  // 彩灯串（更精致，有闪烁感）
-  const bulbGeo = new THREE.SphereGeometry(0.07, SEG.bulb, SEG.bulb);
-  const bulbColors = [
-    0xff86bc, 0x22c7a9, 0xffd166, 0x6a7dff, 
-    0xff5fa2, 0xffffff, 0xffb3d9, 0x4dd0e1
-  ];
-  
-  // 彩灯：性能优先，减少 draw calls（数量太多会让部分电脑/手机卡）
-  const bulbLayers = LOW_POWER ? 4 : 5;
-  for (let layer = 0; layer < bulbLayers; layer++) {
-    const layerY = 0.9 + layer * 0.4;
-    const layerRadius = 1.2 * (1 - layer * 0.15);
-    const bulbsPerLayer = (LOW_POWER ? 5 : 6) + layer * 1;
-    
-    for (let i = 0; i < bulbsPerLayer; i++) {
-      const ang = (Math.PI * 2 * i) / bulbsPerLayer;
-      const col = bulbColors[Math.floor(Math.random() * bulbColors.length)];
-      const bulb = new THREE.Mesh(
-        bulbGeo,
-        new THREE.MeshStandardMaterial({
-          color: col,
-          roughness: 0.15,
-          metalness: 0.4,
-          emissive: col,
-          emissiveIntensity: 0.7,
-        })
-      );
-      bulb.position.set(
-        Math.cos(ang) * layerRadius,
-        layerY + (Math.random() - 0.5) * 0.15,
-        Math.sin(ang) * layerRadius
-      );
-      group.add(bulb);
-    }
-  }
-
-  // 装饰球（更精致，有高光）
-  const ornamentGeo = new THREE.SphereGeometry(0.1, SEG.ornament, SEG.ornament);
-  const ornamentColors = [
-    { c: 0xff3b6f, m: 0.7 },  // 红色
-    { c: 0xffd166, m: 0.8 },  // 金色
-    { c: 0x6a7dff, m: 0.6 },  // 蓝色
-    { c: 0x22c7a9, m: 0.65 }, // 青色
-  ];
-  
-  const ornamentCount = LOW_POWER ? 7 : 12;
-  for (let i = 0; i < ornamentCount; i++) {
-    const y = 1.0 + Math.random() * 1.5;
-    const t = (y - 1.0) / 1.5;
-    const radius = 1.1 * (1 - t) * 0.97;
-    const ang = Math.random() * Math.PI * 2;
-    const ornamentData = ornamentColors[Math.floor(Math.random() * ornamentColors.length)];
-    
-    const ornament = new THREE.Mesh(
-      ornamentGeo,
-      new THREE.MeshStandardMaterial({
-        color: ornamentData.c,
-        roughness: 0.2,
-        metalness: ornamentData.m,
-        emissive: ornamentData.c,
-        emissiveIntensity: 0.3,
-      })
-    );
-    ornament.position.set(Math.cos(ang) * radius, y, Math.sin(ang) * radius);
-    ornament.castShadow = true;
-    group.add(ornament);
-  }
-
-  // 底座（雪地，更精致）
+  // 雪地底座（更干净）
   const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(2.2, SEG.ground),
-    new THREE.MeshStandardMaterial({ 
-      color: 0xf5f9fa,
-      roughness: 0.95,
-      metalness: 0.0
-    })
+    new THREE.CircleGeometry(2.0, SEG.ground),
+    new THREE.MeshLambertMaterial({ color: 0xf5f9fa })
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = 0.02;
-  ground.receiveShadow = true;
   group.add(ground);
 
-  group.position.y = -0.05;
+  group.position.y = -0.06;
   return group;
 }
 
@@ -1169,6 +1172,16 @@ function collectApple(apple, clientX, clientY) {
   popHeart(clientX, clientY);
   // 点击反馈要“亮”但别太吵
   fireworksBurst(clientX, clientY, 0.75);
+  // 小创新：星星眨眼（很轻，不影响性能）
+  try {
+    const face = three.star?.userData?.face;
+    if (face && face.rightEye && !LOW_POWER) {
+      face.rightEye.scale.y = 0.15;
+      setTimeout(() => {
+        try { face.rightEye.scale.y = 1; } catch {}
+      }, 120);
+    }
+  } catch {}
   safePlayAudio();
 
   const goal = Math.max(1, CONFIG.applesToCollect || 5);
