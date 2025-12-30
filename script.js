@@ -18,7 +18,7 @@ const CONFIG = {
 
 // 线上排查用：打开控制台看这个版本号，就能确认是不是最新代码
 //（发布到 GitHub Pages 后，如果还是旧版本，说明页面还没更新或被缓存）
-window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30f";
+window.__CHRISTMAS_SURPRISE_BUILD__ = "2025-12-30g";
 console.log("[christmas-surprise] build:", window.__CHRISTMAS_SURPRISE_BUILD__);
 
 const $ = (sel) => document.querySelector(sel);
@@ -69,6 +69,42 @@ let fw = null;
 let ambientFireworksTimer = null;
 let snowTimer = null;
 let snowEnabled = true;
+
+// ========= 背景音乐兜底（bgm.mp3 缺失时自动用 satisfaction.mp3） =========
+function setupBgmFallback() {
+  if (!bgm) return;
+  const candidates = ["./assets/bgm.mp3", "./assets/satisfaction.mp3"];
+  let idx = 0;
+
+  function use(src) {
+    try {
+      bgm.src = src;
+      bgm.load();
+      console.log("[christmas-surprise] bgm src:", src);
+    } catch {}
+  }
+
+  function next() {
+    idx += 1;
+    if (idx >= candidates.length) {
+      console.warn("[christmas-surprise] bgm load failed: all candidates");
+      return;
+    }
+    use(candidates[idx]);
+  }
+
+  // 首次设置（优先 bgm.mp3）
+  use(candidates[idx]);
+
+  // 如果资源 404/加载失败，自动切换到下一首
+  bgm.addEventListener(
+    "error",
+    () => {
+      next();
+    },
+    { passive: true }
+  );
+}
 
 // ========= 小工具 =========
 function show(el) {
@@ -1425,6 +1461,7 @@ document.addEventListener("pointerdown", (e) => {
 
 // 初始化
 initFireworks();
+setupBgmFallback();
 startSnow();
 setTreeStatus();
 
